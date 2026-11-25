@@ -1,0 +1,149 @@
+// ==============================================================================
+// Project: Customer Churn & Retention Analytics Dashboard
+// Component: DAX Measures Repository
+// Author: Kunisetty Giridhar Sai
+// ==============================================================================
+
+// ------------------------------------------------------------------------------
+// 1. BASELINE VOLUME & REVENUE MEASURES
+// ------------------------------------------------------------------------------
+
+Total Customers = 
+COUNTROWS('CustomerChurn')
+
+Active Customers = 
+CALCULATE(
+    COUNTROWS('CustomerChurn'),
+    'CustomerChurn'[Churn] = "No"
+)
+
+Churned Customers = 
+CALCULATE(
+    COUNTROWS('CustomerChurn'),
+    'CustomerChurn'[Churn] = "Yes"
+)
+
+Churn Rate = 
+DIVIDE(
+    [Churned Customers],
+    [Total Customers],
+    0
+)
+
+Retention Rate = 
+1 - [Churn Rate]
+
+Total MRR = 
+SUM('CustomerChurn'[MonthlyCharges])
+
+Lost MRR = 
+CALCULATE(
+    SUM('CustomerChurn'[MonthlyCharges]),
+    'CustomerChurn'[Churn] = "Yes"
+)
+
+Lost Annual Revenue = 
+[Lost MRR] * 12
+
+Avg Monthly Charges = 
+AVERAGE('CustomerChurn'[MonthlyCharges])
+
+Avg Customer Tenure (Months) = 
+AVERAGE('CustomerChurn'[TenureMonths])
+
+
+// ------------------------------------------------------------------------------
+// 2. CUSTOMER LIFETIME VALUE (CLV) & VALUE METRICS
+// ------------------------------------------------------------------------------
+
+Customer Lifetime Value (CLV) = 
+DIVIDE(
+    [Avg Monthly Charges],
+    [Churn Rate],
+    0
+)
+
+Total Customer Lifetime Spend = 
+SUM('CustomerChurn'[TotalCharges])
+
+Avg Lifetime Spend Per Customer = 
+AVERAGE('CustomerChurn'[TotalCharges])
+
+
+// ------------------------------------------------------------------------------
+// 3. RISK TIER & AT-RISK PIPELINE METRICS
+// ------------------------------------------------------------------------------
+
+High Risk Active Customers = 
+CALCULATE(
+    COUNTROWS('CustomerChurn'),
+    'CustomerChurn'[RiskTier] IN { "High", "Critical" },
+    'CustomerChurn'[Churn] = "No"
+)
+
+High Risk MRR At Stake = 
+CALCULATE(
+    SUM('CustomerChurn'[MonthlyCharges]),
+    'CustomerChurn'[RiskTier] IN { "High", "Critical" },
+    'CustomerChurn'[Churn] = "No"
+)
+
+High Risk Annual Revenue At Stake = 
+[High Risk MRR At Stake] * 12
+
+Critical Risk Count = 
+CALCULATE(
+    COUNTROWS('CustomerChurn'),
+    'CustomerChurn'[RiskTier] = "Critical",
+    'CustomerChurn'[Churn] = "No"
+)
+
+Critical Risk Alert Status = 
+IF(
+    [Critical Risk Count] > 0,
+    "🚨 ALERT: " & FORMAT([Critical Risk Count], "#,##0") & " accounts in CRITICAL risk tier requiring immediate outreach!",
+    "✅ System Stable: No accounts in critical escalation."
+)
+
+
+// ------------------------------------------------------------------------------
+// 4. RETENTION TARGET & FINANCIAL IMPACT (~15% REDUCTION PROJECTION)
+// ------------------------------------------------------------------------------
+
+Target Churn Reduction % = 0.15
+
+Projected Retained Customers (15% Target) = 
+ROUND([Churned Customers] * [Target Churn Reduction %], 0)
+
+Projected Retained Monthly Revenue = 
+[Lost MRR] * [Target Churn Reduction %]
+
+Projected Retained Annual Revenue = 
+[Lost Annual Revenue] * [Target Churn Reduction %]
+
+Net Retention ROI = 
+VAR RetentionCampaignCost = [Projected Retained Customers (15% Target)] * 85 // Avg $85 retention incentive per customer
+RETURN
+[Projected Retained Annual Revenue] - RetentionCampaignCost
+
+
+// ------------------------------------------------------------------------------
+// 5. DYNAMIC COLOR CONDITIONAL FORMATTING
+// ------------------------------------------------------------------------------
+
+Risk Tier Color Code = 
+SWITCH(
+    SELECTEDVALUE('CustomerChurn'[RiskTier]),
+    "Low", "#10B981",       // Emerald Green
+    "Medium", "#F59E0B",    // Amber
+    "High", "#F97316",      // Orange
+    "Critical", "#EF4444",  // Crimson Red
+    "#64748B"               // Neutral Slate
+)
+
+Churn Indicator Color = 
+IF(
+    [Churn Rate] > 0.25,
+    "#EF4444",
+    "#10B981"
+)
